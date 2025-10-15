@@ -11,5 +11,5 @@ export default defineConfig({
   server: {
     port: 3001, // <-- mets le port que tu veux
   },
-  base: process.env.VITE_BASE_PATH || "TestMvola"
+  // base: process.env.VITE_BASE_PATH || "TestMvola"
 })
