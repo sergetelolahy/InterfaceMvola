@@ -28,7 +28,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       `}>
         <div className="p-4">
           <h1 className="text-2xl font-bold flex items-center">
-            <FaHotel className="mr-2" /> Hôtel Manager
+            <FaHotel className="mr-2" /> Hôtel Serge
           </h1>
         </div>
         

@@ -36,7 +36,9 @@ class HttpChambreRepository extends ChambreRepository {
               prix: parseFloat(chambreData.prix), // Convertir en number
               typeChambreId: chambreData.type.id, // Extraire l'id du type
               estPrive: chambreData.estPrive || true ,
-              typeChambreNom: chambreData.type.nom// Valeur par défaut si absent
+              typeChambreNom: chambreData.type.nom,
+              services: chambreData.services || [],
+              typeChambrenbrLit: chambreData.type.nbrLit// Valeur par défaut si absent
             }));
             
           } catch (error) {

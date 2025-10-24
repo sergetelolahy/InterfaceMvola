@@ -12,7 +12,7 @@ const Header = ({ onMenuToggle }) => {
           <FaBars className="text-xl" />
         </button>
         
-        <h2 className="text-xl font-semibold text-gray-800">Hôtel Management</h2>
+        <h2 className="text-xl font-semibold text-gray-800">Hôtel Serge</h2>
         
         <div className="flex items-center space-x-4">
           <div className="relative">
