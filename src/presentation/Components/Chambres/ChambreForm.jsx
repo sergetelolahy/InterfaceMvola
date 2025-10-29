@@ -9,8 +9,8 @@ const ChambreForm = ({ chambre, onSubmit, onCancel }) => {
     estPrive: true,
     typechambre_id: '',
     prix: '',
-    maxPersonnes: 2,
-    services: []
+    services: [],
+    type: []
   });
   
   const [error, setError] = useState('');
@@ -30,7 +30,8 @@ const ChambreForm = ({ chambre, onSubmit, onCancel }) => {
         typechambre_id: chambre.typechambre_id || chambre.typeChambreId || '',
         prix: chambre.prix || '',
         maxPersonnes: chambre.maxPersonnes || 2,
-        services: chambre.services
+        services: chambre.services,
+        
       });
 
       // Initialiser les services sélectionnés si en mode édition
@@ -85,7 +86,6 @@ const ChambreForm = ({ chambre, onSubmit, onCancel }) => {
       const chambreData = {
         ...formData,
         prix: parseFloat(formData.prix),
-        maxPersonnes: parseInt(formData.maxPersonnes),
         services: selectedServiceIds
       };
 

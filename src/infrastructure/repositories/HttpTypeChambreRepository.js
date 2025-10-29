@@ -36,7 +36,8 @@ class HttpTypeChambreRepository extends TypeChambreRepository {
               nom: chambreData.nom,
               nbrLit: parseFloat(chambreData.nbrLit), // Convertir en number
               maxPersonnes: parseFloat(chambreData.maxPersonnes), // Extraire l'id du type
-              description: chambreData.description// Valeur par défaut si absent
+              description: chambreData.description,
+              image: chambreData.image// Valeur par défaut si absent
             }));
             
           } catch (error) {

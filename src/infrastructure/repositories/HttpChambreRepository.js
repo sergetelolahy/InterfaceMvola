@@ -11,47 +11,35 @@ class HttpChambreRepository extends ChambreRepository {
     }
 
     async getAll(){
-        try {
-            console.log('🌐 Appel API GET:', `${this.baseUrl}/chambre/`);
-            const response = await axios.get(`${this.baseUrl}/chambre/`);
-            
-            console.log('📡 Réponse API:', response);
-            console.log('📊 Response.data:', response.data);
-            
-            let chambresData = response.data;
-
-            console.log('ici'+ response.data);
-            
-            // Ajustez le mapping selon la structure de votre API
-            // D'après votre capture, les données ont cette structure :
-            // {
-            //   "numero": "966",
-            //   "prix": "309090.00", 
-            //   "type": { ... }
-            // }
-            
-            return chambresData.map(chambreData => new Chambre({
-              id: chambreData.id, // Assurez-vous que l'API renvoie un id
+      try {
+          console.log('🌐 Appel API GET:', `${this.baseUrl}/chambre/`);
+          const response = await axios.get(`${this.baseUrl}/chambre/`);
+          
+          console.log('📡 Réponse API:', response);
+          console.log('📊 Response.data:', response.data);
+          
+          let chambresData = response.data;
+  
+          console.log('Données chambres:', response.data);
+          
+          return chambresData.map(chambreData => new Chambre({
+              id: chambreData.id,
               numero: chambreData.numero,
-              prix: parseFloat(chambreData.prix), // Convertir en number
-              typeChambreId: chambreData.type.id, // Extraire l'id du type
-              estPrive: chambreData.estPrive || true ,
-              typeChambreNom: chambreData.type.nom,
-              services: chambreData.services || [],
-              typeChambrenbrLit: chambreData.type.nbrLit// Valeur par défaut si absent
-            }));
-            
-          } catch (error) {
-            console.error('💥 Erreur API:', {
-              message: error.message,
-              url: error.config?.url,
-              status: error.response?.status,
-              data: error.response?.data
-            });
-            throw error;
-          }
+              prix: parseFloat(chambreData.prix),
+              // Utilisez le champ qui existe dans la réponse de l'API
+              typeChambreId: chambreData.type?.id || chambreData.type_chambre_id,
+              estPrive: chambreData.estPrive || true,
+              type: chambreData.type, // Si vous voulez garder l'objet type complet
+              services: chambreData.services || []
+          }));
+          
+      } catch (error) {
+          console.error('💥 Erreur API:', error);
+          throw error;
+      }
+  }
    
-    }
+    
  
 
     async create(chambre) {

@@ -194,7 +194,7 @@ const ChambreManagement = () => {
       />
     );
   }
-
+ 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
       {/* ========== EN-TÊTE AVEC RECHERCHE ET FILTRES ========== */}

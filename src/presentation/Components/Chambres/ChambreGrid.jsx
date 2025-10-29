@@ -15,21 +15,22 @@ const ChambreGrid = ({
   itemsPerPage = 4,
   onPageChange 
 }) => {
+
+  // Récupère l'image de la chambre depuis le type
   const getChambreImage = (chambre) => {
-    const images = {
-      deluxe: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=400&h=250&fit=crop',
-      standard: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop',
-      suite: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=400&h=250&fit=crop',
-      familiale: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400&h=250&fit=crop'
-    };
-    
-    const type = chambre.typeChambreNom?.toLowerCase() || 'standard';
-    if (type.includes('deluxe')) return images.deluxe;
-    if (type.includes('suite')) return images.suite;
-    if (type.includes('familial')) return images.familiale;
-    return images.standard;
+    console.log(chambre.type.image);
+    if (chambre.type?.image) {
+      // Vérifie si l'URL commence déjà par http
+      return chambre.type.image.startsWith('http') 
+        ? chambre.type.image 
+        : `http://127.0.0.1:8000${chambre.type.image}`;
+    }
+    // fallback image
+    return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop';
   };
 
+
+  // Icône selon le service
   const getServiceIcon = (serviceNom) => {
     const nom = serviceNom?.toLowerCase() || '';
     if (nom.includes('wifi')) return <FaWifi className="mr-1" />;
@@ -79,23 +80,19 @@ const ChambreGrid = ({
     return pageNumbers;
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center p-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-        <span className="ml-3 text-gray-600">Chargement des chambres...</span>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex justify-center items-center p-12">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      <span className="ml-3 text-gray-600">Chargement des chambres...</span>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="p-8 text-center bg-red-50 rounded-lg border border-red-200">
-        <div className="text-red-600 font-medium">Erreur lors du chargement</div>
-        <div className="text-red-500 text-sm mt-1">{error}</div>
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="p-8 text-center bg-red-50 rounded-lg border border-red-200">
+      <div className="text-red-600 font-medium">Erreur lors du chargement</div>
+      <div className="text-red-500 text-sm mt-1">{error}</div>
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -115,7 +112,7 @@ const ChambreGrid = ({
                 key={chambre.id} 
                 className="relative group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 cursor-pointer"
               >
-                {/* Image et badges */}
+                {/* Image */}
                 <div className="relative">
                   <img 
                     src={getChambreImage(chambre)} 
@@ -123,55 +120,45 @@ const ChambreGrid = ({
                     className="w-full h-48 object-cover"
                   />
 
-                  {/* Tooltip - nombre de lits */}
+                  {/* Tooltip lits */}
                   <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    🛏️  <span>{chambre.typeChambrenbrLit} lit{chambre.typeChambrenbrLit > 1 ? 's' : ''}</span>
+                    🛏️ {chambre.type?.nbrLit || 1} lit{chambre.type?.nbrLit > 1 ? 's' : ''}
                   </div>
 
-                  {/* Badge de disponibilité */}
+                  {/* Badge disponibilité */}
                   <div className="absolute top-3 right-3">
                     <span className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
                       Disponible
                     </span>
                   </div>
 
-                  {/* Badge privé / partagé */}
+                  {/* Badge privé/partagé */}
                   <div className="absolute top-3 left-3">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      chambre.estPrive 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-purple-500 text-white'
+                      chambre.estPrive ? 'bg-blue-500 text-white' : 'bg-purple-500 text-white'
                     }`}>
                       {chambre.estPrive ? 'Privée' : 'Partagée'}
                     </span>
                   </div>
                 </div>
 
-                {/* Contenu de la carte */}
+                {/* Contenu carte */}
                 <div className="p-5">
                   <div className="flex justify-between items-start mb-3">
-                    <h3 className="text-xl font-semibold text-gray-800">
-                      Chambre {chambre.numero}
-                    </h3>
+                    <h3 className="text-xl font-semibold text-gray-800">Chambre {chambre.numero}</h3>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {chambre.prix}€
-                      </div>
+                      <div className="text-2xl font-bold text-blue-600">{chambre.prix}€</div>
                       <div className="text-gray-500 text-sm">par nuit</div>
                     </div>
                   </div>
 
-                  <p className="text-gray-600 mb-4 capitalize">
-                    {chambre.typeChambreNom}
-                  </p>
+                  <p className="text-gray-600 mb-4 capitalize">{chambre.type?.nom || 'Standard'}</p>
 
                   <div className="flex items-center text-gray-500 mb-4">
                     {chambre.estPrive ? (
                       <>
                         <FaUserFriends className="text-sm mr-1" />
-                        <span className="text-sm">
-                          {chambre.maxPersonnes || 2} personne{chambre.maxPersonnes > 1 ? 's' : ''}
-                        </span>
+                        <span className="text-sm">{chambre.type?.maxPersonnes || 2} personne{chambre.type?.maxPersonnes > 1 ? 's' : ''}</span>
                       </>
                     ) : (
                       <>
@@ -200,9 +187,7 @@ const ChambreGrid = ({
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">
-                      Voir détails
-                    </button>
+                    <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">Voir détails</button>
                     <div className="flex gap-2">
                       <button 
                         onClick={() => onEdit(chambre)}

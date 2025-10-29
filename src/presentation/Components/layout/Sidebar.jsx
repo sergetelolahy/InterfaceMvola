@@ -12,16 +12,24 @@ import {
 
 const Sidebar = ({ isOpen, onClose }) => {
   const menuItems = [
-    { icon: <FaTachometerAlt />, label: 'Tableau de bord', path: '/' },
-    { icon: <FaBed />, label: 'Chambres', path: '/chambres' },
-    { icon: <FaConciergeBell />, label: 'Services', path: '/services' },
-    { icon: <FaTags />, label: 'Types de chambres', path: '/types-chambres' },
-    { icon: <FaUsers />, label: 'Clients', path: '/clients' },
-    { icon: <FaCog />, label: 'Paramètres', path: '/parametres' },
+    { icon: <FaTachometerAlt />, label: 'Tableau de bord', path: '/admin' },
+    { icon: <FaBed />, label: 'Chambres', path: '/admin/chambres' },
+    { icon: <FaConciergeBell />, label: 'Services', path: '/admin/services' },
+    { icon: <FaTags />, label: 'Types de chambres', path: '/admin/types-chambres' },
+    // { icon: <FaUsers />, label: 'Clients', path: '/admin/clients' },
+    // { icon: <FaCog />, label: 'Paramètres', path: '/admin/parametres' },
   ];
 
   return (
     <>
+      {/* Overlay pour mobile - IMPORTANT */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+          onClick={onClose}
+        />
+      )}
+      
       <div className={`
         fixed inset-y-0 left-0 z-30 w-64 bg-indigo-800 text-white transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static
@@ -34,18 +42,18 @@ const Sidebar = ({ isOpen, onClose }) => {
         
         <nav className="mt-6">
           {menuItems.map((item, index) => (
-            <NavLink
-              key={index}
-              to={item.path}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `block py-3 px-6 transition-colors flex items-center ${
-                  isActive ? 'bg-indigo-700' : 'hover:bg-indigo-700'
-                }`
-              }
-            >
-              {item.icon} <span className="ml-2">{item.label}</span>
-            </NavLink>
+          <NavLink
+            to={item.path}
+            end  // Uniquement pour le tableau de bord
+            onClick={onClose}
+            className={({ isActive }) =>
+              `block py-3 px-6 transition-colors flex items-center ${
+                isActive ? 'bg-indigo-700' : 'hover:bg-indigo-700'
+              }`
+            }
+          >
+            {item.icon} <span className="ml-2">{item.label}</span>
+          </NavLink>
           ))}
         </nav>
       </div>
