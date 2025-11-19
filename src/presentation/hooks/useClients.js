@@ -58,13 +58,20 @@ export const useClients = () => {
     }
   };
 
-  const createClient = async (clientData) => {
+  // Dans useClients.js
+
+const createClient = async (clientData) => {
   try {
     setError(null);
-    // Utilisation du use case pour créer le client
-    await createClientUseCase.execute(clientData);
+    // Utilisation du use case pour créer le client et RETOURNER la réponse
+    const response = await createClientUseCase.execute(clientData);
+    
     // Recharge la liste des clients après création
     await fetchClients();
+    
+    // RETOURNER la réponse pour pouvoir l'utiliser
+    return response;
+    
   } catch (err) {
     console.error('💥 Erreur détaillée création client:', {
       message: err.message,

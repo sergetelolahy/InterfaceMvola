@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import CreateChambre from "../../application/use_cases/CreateChambre";
 import DeleteChambre from "../../application/use_cases/DeleteChambre";
 import GetChambre from "../../application/use_cases/GetChambres";
+import GetChambresDisponibles from "../../application/use_cases/GetChambresDisponibles";
 import UpdateChambre from "../../application/use_cases/UpdateChambre";
 import HttpChambreRepository from "../../infrastructure/repositories/HttpChambreRepository";
 
@@ -10,6 +11,7 @@ const getChambreUseCase = new GetChambre(chambreRepository);
 const createChambreUseCase = new CreateChambre(chambreRepository);
 const updateChambreUseCase = new UpdateChambre(chambreRepository);
 const deleteChambreUseCase = new DeleteChambre(chambreRepository);
+const getChambresDisponiblesUseCase = new GetChambresDisponibles(chambreRepository);
 
 export const useChambres = () => {
   const [chambres, setChambres] = useState([]);
@@ -207,6 +209,22 @@ export const useChambres = () => {
     }
   };
 
+  const getChambresDisponibles = async (dateDebut, dateFin) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const chambresData = await getChambresDisponiblesUseCase.execute(dateDebut, dateFin);
+      const chambresNormalisees = chambresData.map(normalizeChambre);
+      setChambres(chambresNormalisees);
+    } catch (err) {
+      console.error("Erreur getChambresDisponibles:", err);
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+
   const clearError = () => {
     setError(null);
   };
@@ -222,6 +240,7 @@ export const useChambres = () => {
     createChambre,
     updateChambre,
     deleteChambre,
+    getChambresDisponibles,
     refetch: fetchChambres,
     clearError
   };

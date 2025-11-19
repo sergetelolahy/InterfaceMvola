@@ -10,8 +10,8 @@ class HttpChambreRepository extends ChambreRepository {
         this.baseUrl = 'http://127.0.0.1:8000/api';
     }
 
-    async getAll(){
-      try {
+    async getAll() {
+        try {
           console.log('🌐 Appel API GET:', `${this.baseUrl}/chambre/`);
           const response = await axios.get(`${this.baseUrl}/chambre/`);
           
@@ -19,25 +19,25 @@ class HttpChambreRepository extends ChambreRepository {
           console.log('📊 Response.data:', response.data);
           
           let chambresData = response.data;
-  
+      
           console.log('Données chambres:', response.data);
           
           return chambresData.map(chambreData => new Chambre({
-              id: chambreData.id,
-              numero: chambreData.numero,
-              prix: parseFloat(chambreData.prix),
-              // Utilisez le champ qui existe dans la réponse de l'API
-              typeChambreId: chambreData.type?.id || chambreData.type_chambre_id,
-              estPrive: chambreData.estPrive || true,
-              type: chambreData.type, // Si vous voulez garder l'objet type complet
-              services: chambreData.services || []
+            id: chambreData.id,
+            numero: chambreData.numero,
+            prix: parseFloat(chambreData.prix),
+            typeChambreId: chambreData.type?.id || chambreData.type_chambre_id,
+            estPrive: chambreData.estPrive !== undefined ? chambreData.estPrive : true, // Utilise la valeur de l'API ou true par défaut
+            type: chambreData.type,
+            services: chambreData.services || [],
+            status: chambreData.status || 'libre' // Ajout du statut avec valeur par défaut
           }));
           
-      } catch (error) {
+        } catch (error) {
           console.error('💥 Erreur API:', error);
           throw error;
+        }
       }
-  }
    
     
  
@@ -56,6 +56,37 @@ class HttpChambreRepository extends ChambreRepository {
         await this.httpClient.delete(`${this.baseUrl}/chambre/${id}`);
         return true;
       }
+
+      async getChambresDisponibles(dateDebut, dateFin) {
+        try {
+          console.log(`📅 Recherche chambres disponibles du ${dateDebut} au ${dateFin}`);
+    
+          const response = await axios.post(`${this.baseUrl}/chambre/disponibles`, null, {
+            params: {
+              date_debut: dateDebut,
+              date_fin: dateFin
+            }
+          });
+    
+          const chambresData = response.data.chambres_disponibles || [];
+    
+          return chambresData.map(chambreData => new Chambre({
+            id: chambreData.id,
+            numero: chambreData.numero,
+            prix: parseFloat(chambreData.prix),
+            typeChambreId: chambreData.type?.id || chambreData.type_chambre_id,
+            estPrive: chambreData.estPrive !== undefined ? chambreData.estPrive : true,
+            type: chambreData.type,
+            services: chambreData.services || [],
+            status: chambreData.status || 'libre'
+          }));
+    
+        } catch (error) {
+          console.error('💥 Erreur lors de la récupération des chambres disponibles:', error);
+          throw error;
+        }
+      }
+
     }
 
     export default HttpChambreRepository;

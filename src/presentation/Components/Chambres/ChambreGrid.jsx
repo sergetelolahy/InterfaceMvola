@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   FaEdit, FaTrash, FaUser, FaUserFriends, FaRulerCombined, 
   FaWifi, FaTv, FaSnowflake, FaUtensils, FaShower, FaCoffee, 
-  FaCar, FaUmbrellaBeach, FaDumbbell, FaPaw, FaConciergeBell 
+  FaCar, FaUmbrellaBeach, FaDumbbell, FaPaw, FaConciergeBell,
+  FaBed, FaDoorOpen 
 } from 'react-icons/fa';
 
 const ChambreGrid = ({ 
@@ -18,17 +19,23 @@ const ChambreGrid = ({
 
   // Récupère l'image de la chambre depuis le type
   const getChambreImage = (chambre) => {
-    console.log(chambre.type.image);
     if (chambre.type?.image) {
-      // Vérifie si l'URL commence déjà par http
       return chambre.type.image.startsWith('http') 
         ? chambre.type.image 
         : `http://127.0.0.1:8000${chambre.type.image}`;
     }
-    // fallback image
     return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop';
   };
 
+  // Vérifie si une chambre est occupée
+  const estChambreOccupee = (chambre) => {
+    return chambre.status === 'occupée';
+  };
+
+  // Vérifie si une chambre est libre
+  const estChambreLibre = (chambre) => {
+    return chambre.status === 'libre';
+  };
 
   // Icône selon le service
   const getServiceIcon = (serviceNom) => {
@@ -107,105 +114,160 @@ const ChambreGrid = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {currentItems.map((chambre) => (
-              <div 
-                key={chambre.id} 
-                className="relative group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 cursor-pointer"
-              >
-                {/* Image */}
-                <div className="relative">
-                  <img 
-                    src={getChambreImage(chambre)} 
-                    alt={`Chambre ${chambre.numero}`}
-                    className="w-full h-48 object-cover"
-                  />
+            {currentItems.map((chambre) => {
+              const estOccupee = estChambreOccupee(chambre);
+              const estLibre = estChambreLibre(chambre);
+              
+              return (
+                <div 
+                  key={chambre.id} 
+                  className={`relative group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300 cursor-pointer ${
+                    estOccupee ? 'opacity-90' : ''
+                  }`}
+                >
+                  {/* Image */}
+                  <div className="relative">
+                    <img 
+                      src={getChambreImage(chambre)} 
+                      alt={`Chambre ${chambre.numero}`}
+                      className="w-full h-48 object-cover"
+                    />
 
-                  {/* Tooltip lits */}
-                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    🛏️ {chambre.type?.nbrLit || 1} lit{chambre.type?.nbrLit > 1 ? 's' : ''}
-                  </div>
-
-                  {/* Badge disponibilité */}
-                  <div className="absolute top-3 right-3">
-                    <span className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                      Disponible
-                    </span>
-                  </div>
-
-                  {/* Badge privé/partagé */}
-                  <div className="absolute top-3 left-3">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      chambre.estPrive ? 'bg-blue-500 text-white' : 'bg-purple-500 text-white'
-                    }`}>
-                      {chambre.estPrive ? 'Privée' : 'Partagée'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Contenu carte */}
-                <div className="p-5">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="text-xl font-semibold text-gray-800">Chambre {chambre.numero}</h3>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">{chambre.prix}€</div>
-                      <div className="text-gray-500 text-sm">par nuit</div>
+                    {/* Tooltip lits */}
+                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      🛏️ {chambre.type?.nbrLit || 1} lit{chambre.type?.nbrLit > 1 ? 's' : ''}
                     </div>
-                  </div>
 
-                  <p className="text-gray-600 mb-4 capitalize">{chambre.type?.nom || 'Standard'}</p>
+                    {/* Badge statut occupé/libre */}
+                    <div className="absolute top-3 right-3">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                        estOccupee 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-green-500 text-white'
+                      }`}>
+                        {estOccupee ? (
+                          <>
+                            <FaBed className="text-xs" />
+                            Occupée
+                          </>
+                        ) : (
+                          <>
+                            <FaDoorOpen className="text-xs" />
+                            Libre
+                          </>
+                        )}
+                      </span>
+                    </div>
 
-                  <div className="flex items-center text-gray-500 mb-4">
-                    {chambre.estPrive ? (
-                      <>
-                        <FaUserFriends className="text-sm mr-1" />
-                        <span className="text-sm">{chambre.type?.maxPersonnes || 2} personne{chambre.type?.maxPersonnes > 1 ? 's' : ''}</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaUser className="text-sm mr-1" />
-                        <span className="text-sm">1 personne</span>
-                      </>
+                    {/* Badge privé/partagé */}
+                    <div className="absolute top-3 left-3">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        chambre.estPrive ? 'bg-blue-500 text-white' : 'bg-purple-500 text-white'
+                      }`}>
+                        {chambre.estPrive ? 'Privée' : 'Partagée'}
+                      </span>
+                    </div>
+
+                    {/* Overlay pour chambre occupée */}
+                    {estOccupee && (
+                      <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                        <div className="bg-white bg-opacity-95 rounded-lg px-4 py-3 text-center shadow-lg">
+                          <FaBed className="text-red-500 text-2xl mx-auto mb-2" />
+                          <span className="text-red-600 font-semibold text-sm block">Occupée aujourd'hui</span>
+                          <span className="text-gray-500 text-xs">Non disponible</span>
+                        </div>
+                      </div>
                     )}
-                    <FaRulerCombined className="ml-4 text-sm mr-1" />
-                    <span className="text-sm">{chambre.estPrive ? '35' : '20'}m²</span>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {chambre.services && chambre.services.length > 0 ? (
-                      chambre.services.map((service, index) => (
-                        <span 
-                          key={service.id || index} 
-                          className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs flex items-center"
+                  {/* Contenu carte */}
+                  <div className="p-5">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="text-xl font-semibold text-gray-800">Chambre {chambre.numero}</h3>
+                      <div className="text-right">
+                        <div className={`text-2xl font-bold ${
+                          estOccupee ? 'text-gray-500' : 'text-blue-600'
+                        }`}>
+                          {chambre.prix}€
+                        </div>
+                        <div className="text-gray-500 text-sm">par nuit</div>
+                      </div>
+                    </div>
+
+                    <p className="text-gray-600 mb-4 capitalize">{chambre.type?.nom || 'Standard'}</p>
+
+                    <div className="flex items-center text-gray-500 mb-4">
+                      {chambre.estPrive ? (
+                        <>
+                          <FaUserFriends className="text-sm mr-1" />
+                          <span className="text-sm">{chambre.type?.maxPersonnes || 2} personne{chambre.type?.maxPersonnes > 1 ? 's' : ''}</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaUser className="text-sm mr-1" />
+                          <span className="text-sm">1 personne</span>
+                        </>
+                      )}
+                      <FaRulerCombined className="ml-4 text-sm mr-1" />
+                      <span className="text-sm">{chambre.estPrive ? '35' : '20'}m²</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {chambre.services && chambre.services.length > 0 ? (
+                        chambre.services.map((service, index) => (
+                          <span 
+                            key={service.id || index} 
+                            className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs flex items-center"
+                          >
+                            {getServiceIcon(getServiceLabel(service))}
+                            {getServiceLabel(service)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-xs">Aucun service disponible</span>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <button 
+                        className={`font-medium text-sm ${
+                          estOccupee 
+                            ? 'text-gray-400 cursor-not-allowed' 
+                            : 'text-blue-600 hover:text-blue-800'
+                        }`}
+                        disabled={estOccupee}
+                      >
+                        {estOccupee ? 'Indisponible' : 'Voir détails'}
+                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => onEdit(chambre)}
+                          disabled={estOccupee}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                            estOccupee
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                          }`}
                         >
-                          {getServiceIcon(getServiceLabel(service))}
-                          {getServiceLabel(service)}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-gray-400 text-xs">Aucun service disponible</span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">Voir détails</button>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => onEdit(chambre)}
-                        className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors"
-                      >
-                        <FaEdit className="text-sm" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(chambre.id)}
-                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition-colors"
-                      >
-                        <FaTrash className="text-sm" />
-                      </button>
+                          <FaEdit className="text-sm" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(chambre.id)}
+                          disabled={estOccupee}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                            estOccupee
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-red-100 text-red-600 hover:bg-red-200'
+                          }`}
+                        >
+                          <FaTrash className="text-sm" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
