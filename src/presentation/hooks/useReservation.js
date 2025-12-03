@@ -42,7 +42,6 @@ export const useReservations = () => {
       // Tri par date de création décroissante (les plus récents en premier)
       if (Array.isArray(finalData)) {
         finalData.sort((a, b) => {
-          // ⚠️ CORRECTION : Utiliser date_creation au lieu de date
           const dateA = a.date_creation ? new Date(a.date_creation) : new Date(a.createdAt || 0);
           const dateB = b.date_creation ? new Date(b.date_creation) : new Date(b.createdAt || 0);
           return dateB - dateA; // Décroissant
@@ -73,11 +72,24 @@ export const useReservations = () => {
         id_client: reservationData.id_client,
         id_chambre: reservationData.id_chambre,
         date_debut: reservationData.date_debut,
-        date_fin: reservationData.date_fin
+        date_fin: reservationData.date_fin,
+        statut: reservationData.statut,
+        statut_paiement: reservationData.statut_paiement,
+        montant_total: reservationData.montant_total,
+        acompte: reservationData.acompte
       });
   
-      // Utiliser le use case existant au lieu d'axios directement
-      const nouvelleReservation = await createReservationUseCase.execute(reservationData);
+      // ⚠️ CORRECTION : Préparer les données avec les nouveaux champs de statut
+      const reservationWithStatus = {
+        ...reservationData,
+        statut: reservationData.statut || 'en_attente',
+        statut_paiement: reservationData.statut_paiement || 'non_payee',
+        montant_total: reservationData.montant_total || 0,
+        acompte: reservationData.acompte || 0
+      };
+  
+      // Utiliser le use case existant
+      const nouvelleReservation = await createReservationUseCase.execute(reservationWithStatus);
       
       console.log('✅ useReservations - Réservation créée:', nouvelleReservation);
       
@@ -103,18 +115,23 @@ export const useReservations = () => {
       console.log("🔄 Mise à jour réservation ID:", id, reservationData);
       setError(null);
       
-      // ⚠️ CORRECTION : Préparer les données pour la relation n-n
-      const reservationWithChambres = {
-        ...reservationData,
-        chambres: reservationData.chambres ? reservationData.chambres.map(chambre => ({
-          id: chambre.id,
-          date_debut: reservationData.date_debut,
-          date_fin: reservationData.date_fin,
-          prix: chambre.prix
-        })) : []
+      // CORRECTION : Préparer les données EXACTEMENT comme dans l'image
+      const updateData = {
+        id_client: parseInt(reservationData.id_client),
+        id_chambre: reservationData.id_chambre, // Format déjà en "1,2"
+        date_debut: reservationData.date_debut,
+        date_fin: reservationData.date_fin,
+        statut: reservationData.statut,
+        check_in_time: reservationData.check_in_time || null,
+        check_out_time: reservationData.check_out_time || null,
+        montant_total: parseFloat(reservationData.montant_total) || 0,
+        acompte: parseFloat(reservationData.acompte) || 0
+        // Note: montant_restant sera calculé par le backend
       };
       
-      await updateReservationUseCase.execute(id, reservationWithChambres);
+      console.log("📤 Données envoyées à l'API:", updateData);
+      
+      await updateReservationUseCase.execute(id, updateData);
       await fetchReservations();
     } catch (err) {
       const errorMessage = err.message || 'Erreur lors de la mise à jour de la réservation';
@@ -122,7 +139,7 @@ export const useReservations = () => {
       throw err;
     }
   };
-
+  
   const deleteReservation = async (id) => {
     try {
       setError(null);
@@ -155,7 +172,7 @@ export const useReservations = () => {
         }
       }
 
-      // ⚠️ CORRECTION : Filtrage avec la nouvelle structure
+      // ⚠️ CORRECTION : Filtrage avec la nouvelle structure incluant statut_paiement
       if (Array.isArray(finalData) && searchTerm) {
         finalData = finalData.filter(reservation => {
           const searchLower = searchTerm.toLowerCase();
@@ -169,6 +186,9 @@ export const useReservations = () => {
           const chambreNumero = reservation.chambres?.[0]?.numero || '';
           const chambreType = reservation.chambres?.[0]?.type || '';
           
+          // ⚠️ CORRECTION : Recherche dans les statuts de paiement
+          const statutPaiement = reservation.statut_paiement || '';
+          
           return (
             clientNom.toLowerCase().includes(searchLower) ||
             clientPrenom.toLowerCase().includes(searchLower) ||
@@ -176,6 +196,7 @@ export const useReservations = () => {
             chambreNumero.toLowerCase().includes(searchLower) ||
             chambreType.toLowerCase().includes(searchLower) ||
             (reservation.statut && reservation.statut.toLowerCase().includes(searchLower)) ||
+            (statutPaiement && statutPaiement.toLowerCase().includes(searchLower)) ||
             (reservation.date_debut && reservation.date_debut.includes(searchTerm)) ||
             (reservation.date_fin && reservation.date_fin.includes(searchTerm))
           );
@@ -185,7 +206,6 @@ export const useReservations = () => {
       // Tri par date de création décroissante
       if (Array.isArray(finalData)) {
         finalData.sort((a, b) => {
-          // ⚠️ CORRECTION : Utiliser date_creation
           const dateA = a.date_creation ? new Date(a.date_creation) : new Date(a.createdAt || 0);
           const dateB = b.date_creation ? new Date(b.date_creation) : new Date(b.createdAt || 0);
           return dateB - dateA;
@@ -222,7 +242,6 @@ export const useReservations = () => {
       // Tri par date décroissante
       if (Array.isArray(finalData)) {
         finalData.sort((a, b) => {
-          // ⚠️ CORRECTION : Utiliser date_creation
           const dateA = a.date_creation ? new Date(a.date_creation) : new Date(a.createdAt || 0);
           const dateB = b.date_creation ? new Date(b.date_creation) : new Date(b.createdAt || 0);
           return dateB - dateA;
@@ -284,22 +303,7 @@ export const useReservations = () => {
     }
   };
 
-  // NOUVELLE MÉTHODE : Récupérer les chambres disponibles
-  const getChambresDisponibles = async (dateDebut, dateFin) => {
-    setLoading(true);
-    setError(null);
-    try {
-      console.log('🌐 Récupération chambres disponibles:', { dateDebut, dateFin });
-      const chambresDisponibles = await reservationRepository.getChambresDisponibles(dateDebut, dateFin);
-      return chambresDisponibles;
-    } catch (err) {
-      console.error('🔴 Erreur getChambresDisponibles:', err);
-      setError(err.message || 'Erreur lors de la récupération des chambres disponibles');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   useEffect(() => {
     fetchReservations();
@@ -315,7 +319,6 @@ export const useReservations = () => {
     searchReservations,
     getReservationsByClientId,
     fetchReservationsPaginated,
-    getChambresDisponibles, // ← NOUVEAU
     refetch: fetchReservations
   };
 };

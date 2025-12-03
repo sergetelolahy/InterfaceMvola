@@ -209,6 +209,56 @@ export const useChambres = () => {
     }
   };
 
+  const getChambresEditDisponibles = async (dateDebut, dateFin) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('🟡 Recherche chambres disponibles:', { dateDebut, dateFin });
+      
+      // CORRECTION: Utilisez directement le repository si nécessaire
+      const chambresData = await getChambresDisponiblesUseCase.execute(dateDebut, dateFin);
+      
+      console.log('🟢 Données brutes reçues de getChambresDisponibles:', chambresData);
+      
+      // CORRECTION: S'assurer que c'est un tableau
+      let chambresArray = chambresData;
+      
+      if (chambresData && !Array.isArray(chambresData)) {
+        if (chambresData.data && Array.isArray(chambresData.data)) {
+          chambresArray = chambresData.data;
+        } else if (chambresData.chambres && Array.isArray(chambresData.chambres)) {
+          chambresArray = chambresData.chambres;
+        } else if (chambresData.content && Array.isArray(chambresData.content)) {
+          chambresArray = chambresData.content;
+        } else {
+          // Si c'est un seul objet, le mettre dans un tableau
+          chambresArray = [chambresData];
+        }
+      }
+      
+      console.log('🟢 Chambres après normalisation:', chambresArray);
+      
+      // Normaliser toutes les chambres
+      const chambresNormalisees = Array.isArray(chambresArray) 
+        ? chambresArray.map(chambre => {
+            const normalized = normalizeChambre(chambre);
+            console.log('🔵 Chambre normalisée:', normalized);
+            return normalized;
+          })
+        : [];
+      
+      // IMPORTANT: Retourner les chambres normalisées
+      return chambresNormalisees;
+    } catch (err) {
+      console.error("🔴 Erreur getChambresDisponibles:", err);
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage);
+      throw err; // Important: relancer l'erreur
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getChambresDisponibles = async (dateDebut, dateFin) => {
     setLoading(true);
     setError(null);
@@ -223,6 +273,7 @@ export const useChambres = () => {
       setLoading(false);
     }
   };
+  
   
 
   const clearError = () => {
@@ -241,6 +292,7 @@ export const useChambres = () => {
     updateChambre,
     deleteChambre,
     getChambresDisponibles,
+    getChambresEditDisponibles,
     refetch: fetchChambres,
     clearError
   };

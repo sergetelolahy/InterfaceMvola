@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { FaBed, FaFilter, FaTimes, FaChevronDown, FaSearch, FaEdit, FaTrash, FaEye, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaBed, FaFilter, FaTimes, FaChevronDown, FaSearch, FaEdit, FaTrash, FaEye, FaChevronLeft, FaChevronRight, FaCreditCard, FaMoneyBillWave } from 'react-icons/fa';
 import { useReservations } from '../../hooks/useReservation';
+import ModalPaiement from './ModalPaiement';
+import EditReservationForm from './EditReservationForm';
 
-const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewReservation }) => {
+const ListeReservations = ({ onNouvelleReservation, onViewReservation }) => {
   const {
     reservations,
     loading,
     error,
     deleteReservation,
+    updateReservation,
     searchReservations
   } = useReservations();
 
@@ -15,9 +18,18 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
   const [selectedStatus, setSelectedStatus] = useState([]);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   
-  // ⚠️ AJOUT : États pour la pagination
+  // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // États pour le modal de paiement
+  const [showPaiementModal, setShowPaiementModal] = useState(false);
+  const [reservationEnPaiement, setReservationEnPaiement] = useState(null);
+  const [typePaiement, setTypePaiement] = useState('complet');
+  const [loadingPaiement, setLoadingPaiement] = useState(false);
+
+  // État pour l'édition
+  const [editingReservation, setEditingReservation] = useState(null);
 
   // Extraire les statuts uniques
   const statusOptions = useMemo(() => {
@@ -49,17 +61,17 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
     });
   }, [reservations, searchTerm, selectedStatus]);
 
-  // ⚠️ AJOUT : Calcul des données paginées
+  // Calcul des données paginées
   const paginatedReservations = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredReservations.slice(startIndex, endIndex);
   }, [filteredReservations, currentPage, itemsPerPage]);
 
-  // ⚠️ AJOUT : Calcul du nombre total de pages
+  // Calcul du nombre total de pages
   const totalPages = Math.ceil(filteredReservations.length / itemsPerPage);
 
-  // ⚠️ AJOUT : Réinitialiser la pagination quand les filtres changent
+  // Réinitialiser la pagination quand les filtres changent
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedStatus, filteredReservations.length]);
@@ -90,6 +102,90 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
         console.error('Erreur lors de la suppression:', error);
       }
     }
+  };
+
+  // Gestion de l'édition
+  const handleEdit = (reservation) => {
+    setEditingReservation(reservation);
+  };
+
+  const handleUpdateReservation = async (updateData) => {
+    try {
+      await updateReservation(editingReservation.id, updateData);
+      setEditingReservation(null);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReservation(null);
+  };
+
+  // Ouvrir le modal de paiement
+  const ouvrirModalPaiement = (reservation, type) => {
+    setReservationEnPaiement(reservation);
+    setTypePaiement(type);
+    setShowPaiementModal(true);
+  };
+
+  // Fermer le modal de paiement
+  const fermerModalPaiement = () => {
+    setShowPaiementModal(false);
+    setReservationEnPaiement(null);
+    setLoadingPaiement(false);
+  };
+
+  // Traitement du paiement
+  const traiterPaiement = async (donneesPaiement) => {
+    if (!reservationEnPaiement) return;
+
+    setLoadingPaiement(true);
+    try {
+      const montantTotal = parseFloat(reservationEnPaiement.montant_total);
+      
+      // Mettre à jour la réservation avec le paiement
+      const updateData = {
+        ...reservationEnPaiement,
+        acompte: parseFloat(reservationEnPaiement.acompte) + donneesPaiement.montant,
+        montant_restant: montantTotal - (parseFloat(reservationEnPaiement.acompte) + donneesPaiement.montant),
+        statut_paiement: donneesPaiement.montant >= montantTotal ? 'payee' : 'acompte'
+      };
+
+      await updateReservation(reservationEnPaiement.id, updateData);
+      
+      fermerModalPaiement();
+    } catch (error) {
+      console.error('Erreur lors du paiement:', error);
+    } finally {
+      setLoadingPaiement(false);
+    }
+  };
+
+  // Calcul du montant restant à payer
+  const calculerMontantRestant = (reservation) => {
+    const total = parseFloat(reservation.montant_total) || 0;
+    const acompte = parseFloat(reservation.acompte) || 0;
+    const montantRestant = total - acompte;
+    
+    return Math.max(0, montantRestant);
+  };
+
+  // Vérifier si une réservation est éligible au paiement complet
+  const estEligiblePaiementComplet = (reservation) => {
+    const montantRestant = calculerMontantRestant(reservation);
+    const estEnAttente = reservation.statut === 'en_attente';
+    
+    return estEnAttente && montantRestant > 0;
+  };
+
+  // Vérifier si une réservation est éligible au paiement partiel
+  const estEligiblePaiementPartiel = (reservation) => {
+    const montantRestant = calculerMontantRestant(reservation);
+    const estEnAttente = reservation.statut === 'en_attente';
+    const aDejaUnAcompte = parseFloat(reservation.acompte) > 0;
+    
+    return estEnAttente && montantRestant > 0 && aDejaUnAcompte;
   };
 
   // Réinitialiser les filtres
@@ -171,12 +267,19 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
     }
   };
 
-  // Formater le prix
-  const formatPrix = (prix) => {
-    return parseFloat(prix).toFixed(2) + '€';
+  // Formater le prix en Ariary
+  const formatAriary = (prix) => {
+    if (!prix) return '0 Ar';
+    const numericPrice = parseFloat(prix);
+    if (isNaN(numericPrice)) return '0 Ar';
+    
+    return new Intl.NumberFormat('mg-MG', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(numericPrice) + ' Ar';
   };
 
-  // ⚠️ AJOUT : Composant de pagination
+  // Composant de pagination
   const Pagination = () => {
     if (totalPages <= 1) return null;
 
@@ -205,7 +308,6 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Sélecteur d'éléments par page */}
           <select
             value={itemsPerPage}
             onChange={(e) => {
@@ -220,7 +322,6 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
             <option value={50}>50 par page</option>
           </select>
 
-          {/* Boutons de pagination */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -280,6 +381,17 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
       </div>
     );
   };
+
+  // Afficher le formulaire d'édition si on est en mode édition
+  if (editingReservation) {
+    return (
+      <EditReservationForm
+        reservation={editingReservation}
+        onSubmit={handleUpdateReservation}
+        onCancel={handleCancelEdit}
+      />
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -492,7 +604,6 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50">
-                    {/* ⚠️ SUPPRESSION : Colonne ID retirée */}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chambres</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
@@ -504,10 +615,13 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paginatedReservations.map((reservation) => {
                     const nuits = calculerNuits(reservation.date_debut, reservation.date_fin);
-                    
+                    const montantRestant = calculerMontantRestant(reservation);
+                    const eligiblePaiementComplet = estEligiblePaiementComplet(reservation);
+                    const eligiblePaiementPartiel = estEligiblePaiementPartiel(reservation);
+                    const aDejaUnAcompte = parseFloat(reservation.acompte) > 0;
+
                     return (
                       <tr key={reservation.id} className="hover:bg-gray-50 transition-colors">
-                        {/* ⚠️ SUPPRESSION : Cellule ID retirée */}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
                             {reservation.client?.prenom} {reservation.client?.nom}
@@ -528,15 +642,11 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
                               </div>
                               <div className="text-xs text-green-600 font-medium">
                                 {reservation.chambres.map(chambre => 
-                                  formatPrix(chambre.pivot?.prix || chambre.prix)
+                                  formatAriary(chambre.pivot?.prix || chambre.prix)
                                 ).join(' + ')}
                               </div>
                               <div className="text-xs text-blue-600">
-                                Total: {formatPrix(
-                                  reservation.chambres.reduce((total, chambre) => 
-                                    total + parseFloat(chambre.pivot?.prix || chambre.prix || 0) * nuits, 0
-                                  )
-                                )}
+                                Total: {formatAriary(reservation.montant_total)}
                               </div>
                             </div>
                           ) : (
@@ -558,6 +668,19 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
                           <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(reservation.statut)}`}>
                             {getStatusIcon(reservation.statut)} {formatStatus(reservation.statut)}
                           </span>
+                          {reservation.statut === 'en_attente' && (
+                            <div className="text-xs mt-1">
+                              {aDejaUnAcompte ? (
+                                <div className="text-orange-600">
+                                  Acompte: {formatAriary(reservation.acompte)} / Reste: {formatAriary(montantRestant)}
+                                </div>
+                              ) : (
+                                <div className="text-red-600">
+                                  Reste: {formatAriary(montantRestant)}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(reservation.date_creation)}
@@ -572,12 +695,35 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
                               <FaEye />
                             </button>
                             <button 
-                              onClick={() => onEditReservation && onEditReservation(reservation)}
+                              onClick={() => handleEdit(reservation)}
                               className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
                               title="Modifier"
                             >
                               <FaEdit />
                             </button>
+                            
+                            {/* BOUTON PAIEMENT PARTIEL (2ème paiement) */}
+                            {eligiblePaiementPartiel && (
+                              <button 
+                                onClick={() => ouvrirModalPaiement(reservation, 'partiel')}
+                                className="text-orange-600 hover:text-orange-900 p-2 rounded-lg hover:bg-orange-50 transition-colors"
+                                title="Paiement partiel"
+                              >
+                                <FaMoneyBillWave />
+                              </button>
+                            )}
+                            
+                            {/* BOUTON PAIEMENT COMPLET */}
+                            {eligiblePaiementComplet && (
+                              <button 
+                                onClick={() => ouvrirModalPaiement(reservation, 'complet')}
+                                className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
+                                title="Paiement complet"
+                              >
+                                <FaCreditCard />
+                              </button>
+                            )}
+                            
                             <button 
                               onClick={() => handleDeleteReservation(reservation.id)}
                               className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
@@ -594,7 +740,7 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
               </table>
             </div>
 
-            {/* ⚠️ AJOUT : Pagination */}
+            {/* Pagination */}
             <Pagination />
 
             {filteredReservations.length === 0 && (
@@ -620,6 +766,16 @@ const ListeReservations = ({ onNouvelleReservation, onEditReservation, onViewRes
           </>
         )}
       </div>
+
+      {/* Modal de paiement */}
+      <ModalPaiement 
+        show={showPaiementModal}
+        onClose={fermerModalPaiement}
+        reservation={reservationEnPaiement}
+        typePaiement={typePaiement}
+        onPaiement={traiterPaiement}
+        loading={loadingPaiement}
+      />
     </div>
   );
 };

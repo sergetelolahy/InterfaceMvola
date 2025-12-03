@@ -10,15 +10,34 @@ import { useReservations } from '../../hooks/useReservation';
 import { useClients } from '../../hooks/useClients';
 import { usePaiement } from '../../hooks/usePaiement';
 
+// Constantes pour les statuts
+const STATUTS_PAIEMENT = {
+  COMPLET: 'complete',
+  PARTIEL: 'partielle',
+  ANNULE: 'annule'
+};
+
+const STATUTS_RESERVATION = {
+  CONFIRMEE: 'confirmée',
+  EN_ATTENTE: 'en_attente',
+  ANNULEE: 'annulée'
+};
+
+const STATUTS_FINANCIERS = {
+  PAYEE: 'payee',
+  PARTIELLEMENT_PAYEE: 'partiellement_payee',
+  NON_PAYEE: 'non_payee'
+};
+
 const ReservationManagement = () => {
   const { chambres, loading: chambresLoading, getChambresDisponibles } = useChambres();
-  const { reservations, loading: reservationsLoading, createReservation } = useReservations();
+  const { reservations, loading: reservationsLoading, createReservation, updateReservation } = useReservations();
   const { createClient } = useClients();
   const { createPaiement, loading: paiementLoading } = usePaiement();
 
   const [etapeActuelle, setEtapeActuelle] = useState('liste');
   const [selection, setSelection] = useState({
-    chambre: [], // ⚠️ CORRECTION : Tableau pour plusieurs chambres
+    chambre: [],
     dateDebut: '',
     dateFin: '',
     client: null
@@ -35,10 +54,35 @@ const ReservationManagement = () => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // Déterminer le statut financier basé sur le paiement
+  const determinerStatutFinancier = (montantPaye, montantTotal) => {
+    if (montantPaye >= montantTotal) {
+      return STATUTS_FINANCIERS.PAYEE;
+    } else if (montantPaye > 0) {
+      return STATUTS_FINANCIERS.PARTIELLEMENT_PAYEE;
+    } else {
+      return STATUTS_FINANCIERS.NON_PAYEE;
+    }
+  };
+
+  // Déterminer le statut de réservation basé sur le statut financier
+  const determinerStatutReservation = (statutFinancier) => {
+    switch (statutFinancier) {
+      case STATUTS_FINANCIERS.PAYEE:
+        return STATUTS_RESERVATION.CONFIRMEE;
+      case STATUTS_FINANCIERS.PARTIELLEMENT_PAYEE:
+        return STATUTS_RESERVATION.EN_ATTENTE; // En attente du solde
+      case STATUTS_FINANCIERS.NON_PAYEE:
+        return STATUTS_RESERVATION.EN_ATTENTE;
+      default:
+        return STATUTS_RESERVATION.EN_ATTENTE;
+    }
+  };
+
   // Navigation étapes
   const demarrerNouvelleReservation = () => {
     setSelection({
-      chambre: [], // ⚠️ CORRECTION : Tableau vide
+      chambre: [],
       dateDebut: '',
       dateFin: '',
       client: null
@@ -57,7 +101,7 @@ const ReservationManagement = () => {
     setEtapeActuelle('selection');
   };
 
-  // ⚠️ CORRECTION : Sélection de plusieurs chambres
+  // Sélection de plusieurs chambres
   const selectionnerChambres = (chambresSelectionnees) => {
     console.log('🔍 Chambres sélectionnées:', chambresSelectionnees);
     setSelection(prev => ({ ...prev, chambre: chambresSelectionnees }));
@@ -102,7 +146,7 @@ const ReservationManagement = () => {
     }
   };
 
-  // ⚠️ CORRECTION : Créer la réservation avec plusieurs chambres
+  // Créer la réservation avec plusieurs chambres
   const creerReservationEtPaiement = async (donneesPaiement) => {
     setLoading(true);
     setError(null);
@@ -110,15 +154,15 @@ const ReservationManagement = () => {
     try {
       console.log('🔍 DEBUG - selection:', selection);
       console.log('🔍 DEBUG - chambres:', selection.chambre);
-
+  
       if (!selection.client || !selection.chambre || selection.chambre.length === 0) {
         throw new Error('Données de réservation incomplètes: client ou chambres manquants');
       }
-
-      // ⚠️ CORRECTION : Formater les IDs des chambres comme dans Postman : "1,2"
+  
+      // Formater les IDs des chambres
       const idChambres = selection.chambre.map(chambre => chambre.id).join(',');
       console.log('🔍 IDs chambres formatés:', idChambres);
-
+  
       // Calculer le total pour toutes les chambres
       const nuits = calculerNuits(selection.dateDebut, selection.dateFin);
       const totalChambres = selection.chambre.reduce((total, chambre) => {
@@ -126,49 +170,94 @@ const ReservationManagement = () => {
         return total + (chambre.prix * nuits * quantite);
       }, 0);
 
+      // Déterminer les statuts CORRECTEMENT
+      const statutFinancier = determinerStatutFinancier(donneesPaiement.montant, totalChambres);
+      const statutReservation = determinerStatutReservation(statutFinancier);
+  
       // 1. Créer la réservation
       const reservationData = {
         id_client: selection.client.id,
-        id_chambre: idChambres, // ⚠️ CORRECTION : Chaîne formatée "1,2"
+        id_chambre: idChambres,
         date_debut: selection.dateDebut,
         date_fin: selection.dateFin,
-        statut: "en_attente",
-        tarif_template: Math.round(totalChambres) // Utiliser le total calculé
+        statut: statutReservation, // Statut de workflow (confirmée, en_attente)
+        statut_paiement: statutFinancier, // Statut financier (payee, partiellement_payee, non_payee)
+        montant_total: Math.round(totalChambres),
+        acompte: donneesPaiement.montant,
+        tarif_template: Math.round(totalChambres)
       };
-
+  
       console.log('📤 Création réservation:', reservationData);
-
+  
       const nouvelleReservation = await createReservation(reservationData);
       
       console.log('✅ Réservation créée:', nouvelleReservation);
+  
+      // Récupérer l'ID de la réservation
+      let reservationId;
+      
+      if (nouvelleReservation && nouvelleReservation.id) {
+        reservationId = nouvelleReservation.id;
+      } else if (nouvelleReservation && nouvelleReservation.data && nouvelleReservation.data.id) {
+        reservationId = nouvelleReservation.data.id;
+      } else if (nouvelleReservation && nouvelleReservation.reservation && nouvelleReservation.reservation.id) {
+        reservationId = nouvelleReservation.reservation.id;
+      } else {
+        console.error('❌ Structure de réponse inattendue:', nouvelleReservation);
+        throw new Error('Impossible de récupérer l\'ID de la réservation créée');
+      }
+  
+      console.log('🔑 ID réservation récupéré:', reservationId);
 
-      // 2. Créer le paiement
-      const paiementData = {
-        id_reservation: nouvelleReservation.id,
+      // 2. Créer le paiement seulement si le montant est > 0
+      let resultatPaiement = null;
+      if (donneesPaiement.montant > 0) {
+        // Déterminer le statut du paiement
+        const statutPaiement = donneesPaiement.montant >= totalChambres 
+          ? STATUTS_PAIEMENT.COMPLET 
+          : STATUTS_PAIEMENT.PARTIEL;
+
+        const paiementData = {
+          id_reservation: reservationId,
+          montant: donneesPaiement.montant,
+          date_paiement: donneesPaiement.date_paiement,
+          mode_paiement: donneesPaiement.mode_paiement,
+          status: statutPaiement
+        };
+  
+        console.log('💳 Création paiement:', paiementData);
+        resultatPaiement = await createPaiement(paiementData);
+      }
+  
+      console.log('✅ Réservation et paiement confirmés avec succès');
+      
+      // Retourner les données complètes
+      return {
+        id: resultatPaiement?.id,
         montant: donneesPaiement.montant,
         date_paiement: donneesPaiement.date_paiement,
         mode_paiement: donneesPaiement.mode_paiement,
-        status: donneesPaiement.status
-      };
-
-      console.log('💳 Création paiement:', paiementData);
-
-      await createPaiement(paiementData);
-
-      console.log('✅ Paiement et réservation confirmés avec succès');
-      
-      // ⚠️ CORRECTION : Retourner les données complètes avec toutes les chambres
-      return {
-        reservation: nouvelleReservation,
+        status: resultatPaiement?.status || STATUTS_PAIEMENT.COMPLET,
+        reservation: {
+          id: reservationId,
+          date_debut: selection.dateDebut,
+          date_fin: selection.dateFin,
+          statut: statutReservation,
+          statut_paiement: statutFinancier,
+          client: selection.client,
+          chambres: selection.chambre,
+          montant_total: totalChambres,
+          acompte: donneesPaiement.montant
+        },
         client: selection.client,
-        chambres: selection.chambre, // ⚠️ Tableau de chambres
+        chambres: selection.chambre,
         dates: {
           dateDebut: selection.dateDebut,
           dateFin: selection.dateFin
         },
         nuits: nuits,
         total: totalChambres,
-        paiement: paiementData
+        statut_paiement: statutFinancier
       };
       
     } catch (error) {
@@ -180,9 +269,28 @@ const ReservationManagement = () => {
     }
   };
 
+  // Fonction pour mettre à jour le statut d'une réservation après paiement
+  const mettreAJourStatutReservation = async (reservationId, montantPaye, montantTotal) => {
+    try {
+      const statutFinancier = determinerStatutFinancier(montantPaye, montantTotal);
+      const statutReservation = determinerStatutReservation(statutFinancier);
+      
+      await updateReservation(reservationId, {
+        statut: statutReservation,
+        statut_paiement: statutFinancier,
+        acompte: montantPaye
+      });
+      
+      return { statutFinancier, statutReservation };
+    } catch (error) {
+      console.error('❌ Erreur mise à jour statut réservation:', error);
+      throw error;
+    }
+  };
+
   const annulerReservation = () => {
     setSelection({ 
-      chambre: [], // ⚠️ CORRECTION : Tableau vide
+      chambre: [],
       dateDebut: '', 
       dateFin: '', 
       client: null 
@@ -206,7 +314,7 @@ const ReservationManagement = () => {
           <EtapeSelection 
             chambres={chambres} 
             dates={selection} 
-            onSelect={selectionnerChambres} // ⚠️ CORRECTION : Nom de fonction
+            onSelect={selectionnerChambres}
             onBack={retourEtapeRecherche} 
             calculerNuits={calculerNuits} 
           />
@@ -232,6 +340,7 @@ const ReservationManagement = () => {
             loading={loading || paiementLoading}
             error={error}
             calculerNuits={calculerNuits}
+            determinerStatutFinancier={determinerStatutFinancier}
           />
         );
       default:
@@ -239,7 +348,8 @@ const ReservationManagement = () => {
           <ListeReservations 
             reservations={reservations} 
             onNouvelleReservation={demarrerNouvelleReservation} 
-            loading={reservationsLoading} 
+            loading={reservationsLoading}
+            onPaiementReservation={mettreAJourStatutReservation}
           />
         );
     }
@@ -261,7 +371,7 @@ const ReservationManagement = () => {
   );
 };
 
-// Navbar et Header restent identiques...
+// Navbar et Header
 const Navbar = () => (
   <nav className="bg-white shadow-lg py-3 px-6 mb-6">
     <div className="flex items-center gap-2">
@@ -281,7 +391,7 @@ const Header = ({ etapeActuelle }) => {
   };
   const sousTitres = {
     recherche: 'Recherchez les chambres disponibles',
-    selection: 'Choisissez une ou plusieurs chambres', // ⚠️ CORRECTION : texte
+    selection: 'Choisissez une ou plusieurs chambres',
     confirmation: 'Recherchez ou créez un client',
     finale: 'Créez la réservation et enregistrez le paiement',
     liste: 'Gérez les réservations et consultez les chambres disponibles'

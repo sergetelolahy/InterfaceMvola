@@ -13,28 +13,36 @@ const EtapeFinale = ({
   const [showPaiement, setShowPaiement] = useState(false);
   const [reservationCreee, setReservationCreee] = useState(null);
   
-  // ⚠️ CORRECTION : Utiliser selection.chambre (singulier) au lieu de selection.chambres
-  const chambres = selection?.chambre || selection?.chambres || [];
+  // Gestion des chambres (singulier ou pluriel)
+  const chambres = selection?.chambres || selection?.chambre || [];
   const nuits = selection?.dateDebut && selection?.dateFin ? calculerNuits(selection.dateDebut, selection.dateFin) : 0;
   
   // Calcul du total avec toutes les chambres
   const total = chambres.reduce((sum, chambre) => {
-    return sum + (parseFloat(chambre.prix) * nuits * (chambre.quantite || 1));
+    return sum + (parseFloat(chambre.prix || 0) * nuits * (chambre.quantite || 1));
   }, 0) || 0;
   
   const [donneesPaiement, setDonneesPaiement] = useState({
     montant: total,
     date_paiement: new Date().toISOString().split('T')[0],
     mode_paiement: 'especes',
-    status: 'total'
+    status: 'complete' // Défaut correct
   });
 
   const handlePaiementSubmit = async (e) => {
     e.preventDefault();
     try {
+      // ⚠️ CORRECTION : Ajout de logs de débogage
+      console.log('🔍 DEBUG - Statut avant validation:', donneesPaiement.status);
+      
+      // CORRECTION : Validation et conversion des données
+      const statusValide = validerStatus(donneesPaiement.status);
+      console.log('🔍 DEBUG - Statut après validation:', statusValide);
+      
       const donneesValidees = {
         ...donneesPaiement,
-        status: validerStatus(donneesPaiement.status),
+        montant: parseFloat(donneesPaiement.montant),
+        status: statusValide, // ⚠️ Utiliser la valeur validée
         mode_paiement: validerModePaiement(donneesPaiement.mode_paiement)
       };
       
@@ -44,25 +52,35 @@ const EtapeFinale = ({
       setReservationCreee(resultat);
       setShowPaiement(false);
     } catch (error) {
-      // L'erreur est gérée par le parent
+      console.error('❌ Erreur dans handlePaiementSubmit:', error);
     }
   };
 
+  // ⚠️ CORRECTION COMPLÈTE : Fonction de validation alignée avec Laravel
   const validerStatus = (status) => {
-    const statusValides = ['validé', 'en attente', 'partielle', 'total'];
+    console.log(`🔄 Validation du statut: "${status}"`);
     
+    // Votre base de données Laravel utilise 'complete' et 'partielle'
+    const statusValides = ['complete', 'partielle'];
+    
+    // Si le statut est déjà valide, on le retourne tel quel
     if (statusValides.includes(status)) {
+      console.log(`✅ Statut déjà valide: "${status}"`);
       return status;
     }
     
+    // Mapping des statuts vers les valeurs acceptées par Laravel
     const mapping = {
-      'complet': 'total',
-      'partiel': 'partielle',
-      'acompte': 'partielle'
+      'complet': 'complete',      // 'complet' (français) devient 'complete' (anglais)
+      'partiel': 'partielle',     // 'partiel' (français) devient 'partielle' (anglais)
+      'total': 'complete',        // 'total' devient 'complete'
+      'validé': 'complete',       // 'validé' devient 'complete'
+      'en attente': 'complete',   // 'en attente' devient 'complete'
+      'acompte': 'partielle'      // 'acompte' devient 'partielle'
     };
     
-    const statutCorrige = mapping[status] || 'en attente';
-    console.log(`🔄 Statut corrigé: ${status} -> ${statutCorrige}`);
+    const statutCorrige = mapping[status] || 'complete';
+    console.log(`🔄 Statut corrigé: "${status}" -> "${statutCorrige}"`);
     return statutCorrige;
   };
 
@@ -80,12 +98,16 @@ const EtapeFinale = ({
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -93,7 +115,33 @@ const EtapeFinale = ({
     alert('Copié !');
   };
 
-  // ⚠️ CORRECTION : Utiliser la variable chambres (qui contient selection.chambre)
+  // Fonction pour normaliser les données de réservation créée
+  const getReservationData = () => {
+    if (!reservationCreee) return null;
+
+    return {
+      // Données de paiement
+      id: reservationCreee.id,
+      montant: reservationCreee.montant,
+      date_paiement: reservationCreee.date_paiement,
+      mode_paiement: reservationCreee.mode_paiement,
+      status: reservationCreee.status,
+      
+      // Données de réservation
+      reservation: reservationCreee.reservation || {},
+      client: reservationCreee.client || reservationCreee.reservation?.client || selection.client,
+      chambres: reservationCreee.chambres || reservationCreee.reservation?.chambres || chambres,
+      
+      // Dates et calculs
+      dates: reservationCreee.dates || {
+        dateDebut: reservationCreee.reservation?.date_debut || selection.dateDebut,
+        dateFin: reservationCreee.reservation?.date_fin || selection.dateFin
+      },
+      nuits: reservationCreee.nuits || nuits,
+      total: reservationCreee.total || total
+    };
+  };
+
   const renderChambresSelectionnees = () => {
     if (!chambres || chambres.length === 0) {
       return <div className="text-red-500">Aucune chambre sélectionnée</div>;
@@ -108,7 +156,7 @@ const EtapeFinale = ({
               <div>
                 <span className="font-semibold text-gray-800">Chambre {chambre.numero}</span>
                 <div className="text-sm text-gray-600 capitalize">
-                  {chambre.type?.nom || 'Standard'} 
+                  {chambre.type?.nom || chambre.typechambre?.nom || 'Standard'} 
                   {chambre.quantite > 1 && ` × ${chambre.quantite}`}
                 </div>
               </div>
@@ -125,7 +173,10 @@ const EtapeFinale = ({
     );
   };
 
-  if (reservationCreee) {
+  // Utiliser les données normalisées
+  const reservationData = getReservationData();
+
+  if (reservationData) {
     return (
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-w-4xl mx-auto">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-white text-center">
@@ -148,10 +199,10 @@ const EtapeFinale = ({
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-2xl font-bold text-blue-600 bg-white px-4 py-2 rounded-lg border border-blue-300">
-                  {reservationCreee.reservation.id}
+                  {reservationData.reservation.id}
                 </span>
                 <button
-                  onClick={() => copyToClipboard(reservationCreee.reservation.id)}
+                  onClick={() => copyToClipboard(reservationData.reservation.id.toString())}
                   className="bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 transition-colors"
                   title="Copier le numéro"
                 >
@@ -172,18 +223,18 @@ const EtapeFinale = ({
                 <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                   <span className="text-gray-600">Nom complet</span>
                   <span className="font-semibold text-gray-800">
-                    {reservationCreee.client.prenom} {reservationCreee.client.nom}
+                    {reservationData.client.prenom} {reservationData.client.nom}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                   <span className="text-gray-600">Email</span>
-                  <span className="font-semibold text-gray-800">{reservationCreee.client.email}</span>
+                  <span className="font-semibold text-gray-800">{reservationData.client.email}</span>
                 </div>
 
                 <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                   <span className="text-gray-600">Téléphone</span>
-                  <span className="font-semibold text-gray-800">{reservationCreee.client.tel || reservationCreee.client.telephone || 'Non renseigné'}</span>
+                  <span className="font-semibold text-gray-800">{reservationData.client.tel || reservationData.client.telephone || 'Non renseigné'}</span>
                 </div>
 
                 <div className="flex justify-between items-center">
@@ -192,7 +243,7 @@ const EtapeFinale = ({
                     CIN
                   </span>
                   <span className="font-semibold text-gray-800 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
-                    {reservationCreee.client.cin || 'Non renseigné'}
+                    {reservationData.client.cin || 'Non renseigné'}
                   </span>
                 </div>
               </div>
@@ -205,18 +256,17 @@ const EtapeFinale = ({
               </h3>
               
               <div className="space-y-3">
-                {/* ⚠️ CORRECTION : Utiliser chambresReservation au lieu de reservationCreee.chambres */}
                 <div className="pb-2 border-b border-gray-200">
                   <span className="text-gray-600 block mb-2">Chambres réservées</span>
                   <div className="space-y-2">
-                    {reservationCreee.chambres?.map((chambre, index) => (
+                    {reservationData.chambres.map((chambre, index) => (
                       <div key={chambre.id || index} className="flex justify-between items-center">
                         <span className="font-semibold text-gray-800">
                           Chambre {chambre.numero}
                           {chambre.quantite > 1 && ` × ${chambre.quantite}`}
                         </span>
                         <span className="text-gray-600 capitalize text-sm">
-                          {chambre.type?.nom || 'Standard'}
+                          {chambre.type?.nom || chambre.typechambre?.nom || 'Standard'}
                         </span>
                       </div>
                     ))}
@@ -226,21 +276,21 @@ const EtapeFinale = ({
                 <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                   <span className="text-gray-600">Arrivée</span>
                   <span className="font-semibold text-gray-800">
-                    {formatDate(reservationCreee.dates?.dateDebut)}
+                    {formatDate(reservationData.dates.dateDebut)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center pb-2 border-b border-gray-200">
                   <span className="text-gray-600">Départ</span>
                   <span className="font-semibold text-gray-800">
-                    {formatDate(reservationCreee.dates?.dateFin)}
+                    {formatDate(reservationData.dates.dateFin)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Durée</span>
                   <span className="font-semibold text-green-600">
-                    {reservationCreee.nuits} nuit{reservationCreee.nuits > 1 ? 's' : ''}
+                    {reservationData.nuits} nuit{reservationData.nuits > 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -257,21 +307,21 @@ const EtapeFinale = ({
               <div className="bg-white p-4 rounded-lg border text-center">
                 <p className="text-sm text-gray-600">Prix total par nuit</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {reservationCreee.total / reservationCreee.nuits}€
+                  {reservationData.nuits > 0 ? (reservationData.total / reservationData.nuits).toFixed(2) : 0}€
                 </p>
               </div>
               
               <div className="bg-white p-4 rounded-lg border text-center">
                 <p className="text-sm text-gray-600">Nombre de nuits</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {reservationCreee.nuits}
+                  {reservationData.nuits}
                 </p>
               </div>
               
               <div className="bg-white p-4 rounded-lg border text-center">
                 <p className="text-sm text-gray-600">Total payé</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {reservationCreee.paiement?.montant}€
+                  {reservationData.montant}€
                 </p>
               </div>
             </div>
@@ -280,10 +330,10 @@ const EtapeFinale = ({
               <div className="text-green-500 text-4xl mb-2">✅</div>
               <h4 className="font-semibold text-green-800 text-lg mb-2">Paiement Enregistré !</h4>
               <p className="text-green-700">
-                Le paiement de <strong>{reservationCreee.paiement?.montant}€</strong> a été enregistré avec succès.
+                Le paiement de <strong>{reservationData.montant}€</strong> a été enregistré avec succès.
               </p>
               <p className="text-green-600 text-sm mt-1">
-                Mode: {reservationCreee.paiement?.mode_paiement} • Statut: {reservationCreee.paiement?.status}
+                Mode: {reservationData.mode_paiement} • Statut: {reservationData.status}
               </p>
             </div>
           </div>
@@ -373,7 +423,6 @@ const EtapeFinale = ({
             </h3>
             
             <div className="space-y-3">
-              {/* ⚠️ CORRECTION : Utiliser la variable chambres */}
               <div className="pb-2 border-b border-gray-200">
                 <span className="text-gray-600 block mb-2">Chambres sélectionnées</span>
                 {renderChambresSelectionnees()}
@@ -518,10 +567,8 @@ const EtapeFinale = ({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       required
                     >
-                      <option value="total">Complet</option>
+                      <option value="complete">Complet</option>
                       <option value="partielle">Partiel</option>
-                      <option value="en attente">En attente</option>
-                      <option value="validé">Validé</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
                       ⚠️ Ces valeurs correspondent aux options de votre base de données

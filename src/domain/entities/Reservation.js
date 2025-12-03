@@ -10,8 +10,13 @@ class Reservation {
         check_in_time,
         check_out_time,
         client,
-        chambres = [], // ← CHANGEMENT: maintenant un tableau
-        chambre_reservation = [] // ← NOUVEAU: données pivot
+        chambres = [],
+        chambre_reservation = [],
+        // NOUVEAUX CHAMPS
+        montant_total = 0,
+        acompte = 0,
+        montant_restant = 0,
+        statut_paiement = 'non_payee'
     }) {
         this.id = id;
         this.id_client = id_client;
@@ -23,8 +28,12 @@ class Reservation {
         this.check_in_time = check_in_time;
         this.check_out_time = check_out_time;
         this.client = client;
-        this.chambres = chambres; // Tableau de chambres
-        this.chambre_reservation = chambre_reservation; // Données pivot
+        this.chambres = chambres;
+        this.chambre_reservation = chambre_reservation;
+        this.montant_total = montant_total;
+        this.acompte = acompte;
+        this.montant_restant = montant_restant;
+        this.statut_paiement = statut_paiement;
     }
 }
 

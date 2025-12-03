@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FaCheck, FaArrowLeft, FaUserFriends, FaRulerCombined,
   FaWifi, FaTv, FaSnowflake, FaConciergeBell,
   FaBed, FaDoorOpen, FaPlus, FaMinus,
-  FaStar, FaClock, FaShoppingCart
+  FaStar, FaClock, FaShoppingCart, FaBan
 } from 'react-icons/fa';
 import { MdKingBed, MdAcUnit, MdLocalBar } from 'react-icons/md';
 
@@ -11,14 +11,25 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
   const [selectedChambres, setSelectedChambres] = useState([]);
   const [quantites, setQuantites] = useState({});
 
-  // ✅ Fonction pour formater l'URL de l'image
+  // ✅ CORRECTION: Fonction pour formater l'URL de l'image
   const getChambreImage = (chambre) => {
-    if (chambre.type?.image) {
-      return chambre.type.image.startsWith('http') 
-        ? chambre.type.image 
-        : `http://127.0.0.1:8000${chambre.type.image}`;
+    // Si pas d'image, retourner une image par défaut
+    if (!chambre.type || !chambre.type.image) {
+      return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop';
     }
-    return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop';
+    
+    // Si c'est déjà une URL complète
+    if (chambre.type.image.startsWith('http')) {
+      return chambre.type.image;
+    }
+    
+    // Si c'est un chemin relatif
+    if (chambre.type.image.startsWith('/')) {
+      return `http://127.0.0.1:8000${chambre.type.image}`;
+    }
+    
+    // Par défaut, retourner l'image telle quelle
+    return chambre.type.image;
   };
 
   const getServiceIcon = (serviceNom) => {
@@ -37,13 +48,24 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
     return 'Service';
   };
 
-  // ✅ Gestion de la sélection multiple
+  // ✅ CORRECTION: Vérifier si une chambre est disponible
+  const isChambreDisponible = (chambre) => {
+    // Vérifier plusieurs propriétés possibles pour le statut
+    const status = chambre.status || chambre.statut || chambre.etat;
+    return status === 'libre' || status === 'disponible' || status === 'libre';
+  };
+
+  // ✅ CORRECTION: Gestion de la sélection multiple avec vérification de disponibilité
   const toggleChambreSelection = (chambre) => {
-    if (chambre.status === 'occupée') return;
+    // Si chambre n'est pas disponible, ne rien faire
+    if (!isChambreDisponible(chambre)) {
+      return;
+    }
 
     const isSelected = selectedChambres.some(c => c.id === chambre.id);
     
     if (isSelected) {
+      // Retirer de la sélection
       setSelectedChambres(prev => prev.filter(c => c.id !== chambre.id));
       setQuantites(prev => {
         const newQuantites = { ...prev };
@@ -51,6 +73,7 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
         return newQuantites;
       });
     } else {
+      // Ajouter à la sélection avec quantité par défaut 1
       setSelectedChambres(prev => [...prev, chambre]);
       setQuantites(prev => ({
         ...prev,
@@ -59,7 +82,9 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
     }
   };
 
-  const updateQuantite = (chambreId, nouvelleQuantite) => {
+  const updateQuantite = (chambreId, nouvelleQuantite, e) => {
+    if (e) e.stopPropagation();
+    
     if (nouvelleQuantite < 1) return;
     
     setQuantites(prev => ({
@@ -68,17 +93,26 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
     }));
   };
 
-  // Dans EtapeSelection.jsx
-  const handleSubmit = () => {
+  const handleSubmit = (e) => {
+    if (e) e.stopPropagation();
+    
+    if (selectedChambres.length === 0) {
+      alert('Veuillez sélectionner au moins une chambre');
+      return;
+    }
+    
     const chambresAvecQuantites = selectedChambres.map(chambre => ({
       ...chambre,
       quantite: quantites[chambre.id] || 1
     }));
     
-    onSelect(chambresAvecQuantites); // ⚠️ Important : envoyer un tableau
+    console.log('Envoi des chambres sélectionnées:', chambresAvecQuantites);
+    onSelect(chambresAvecQuantites);
   };
 
-  const nuits = calculerNuits(dates.dateDebut, dates.dateFin);
+  const nuits = dates.dateDebut && dates.dateFin 
+    ? calculerNuits(dates.dateDebut, dates.dateFin) 
+    : 0;
 
   const calculerTotalGeneral = () => {
     return selectedChambres.reduce((total, chambre) => {
@@ -86,6 +120,10 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
       return total + (chambre.prix * nuits * quantite);
     }, 0);
   };
+
+  // ✅ CORRECTION: Filtrer et afficher seulement les chambres disponibles
+  const chambresDisponibles = chambres?.filter(chambre => isChambreDisponible(chambre)) || [];
+  const chambresIndisponibles = chambres?.filter(chambre => !isChambreDisponible(chambre)) || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
@@ -103,7 +141,7 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
                 </h1>
                 <p className="text-gray-600 text-sm flex items-center gap-1">
                   <FaClock className="text-blue-500" />
-                  {chambres.length} chambres disponibles • {nuits} nuit(s)
+                  {chambresDisponibles.length} chambres disponibles • {nuits} nuit(s)
                 </p>
               </div>
             </div>
@@ -157,229 +195,244 @@ const EtapeSelection = ({ chambres, dates, onSelect, onBack, calculerNuits }) =>
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Cartes des chambres - Design moderne */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
-          {chambres.map((chambre) => {
-            const isSelected = selectedChambres.some(c => c.id === chambre.id);
-            const quantite = quantites[chambre.id] || 1;
-            const total = chambre.prix * nuits * quantite;
+        {/* Section des chambres disponibles */}
+        {chambresDisponibles.length > 0 && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Chambres Disponibles</h2>
+              <p className="text-gray-600">Sélectionnez une ou plusieurs chambres pour votre réservation</p>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+              {chambresDisponibles.map((chambre) => {
+                const isSelected = selectedChambres.some(c => c.id === chambre.id);
+                const quantite = quantites[chambre.id] || 1;
+                const total = chambre.prix * nuits * quantite;
 
-            return (
-              <div
-                key={chambre.id}
-                className={`group relative bg-white rounded-3xl overflow-hidden transition-all duration-500 cursor-pointer ${
-                  isSelected 
-                    ? 'ring-4 ring-green-400/30 shadow-2xl scale-[1.02]' 
-                    : chambre.status === 'occupée'
-                    ? 'opacity-70 cursor-not-allowed'
-                    : 'shadow-lg hover:shadow-2xl hover:scale-[1.02]'
-                }`}
-                onClick={() => chambre.status !== 'occupée' && toggleChambreSelection(chambre)}
-              >
-                {/* Image avec overlay gradient */}
-                <div className="relative h-56 overflow-hidden">
-                  <img
-                    src={getChambreImage(chambre)}
-                    alt={`Chambre ${chambre.numero}`}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  
-                  {/* Gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-
-                  {/* Badges en haut */}
-                  <div className="absolute top-4 left-4 flex flex-col gap-2">
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
-                      chambre.estPrive 
-                        ? 'bg-blue-500/90 text-white' 
-                        : 'bg-purple-500/90 text-white'
-                    }`}>
-                      {chambre.estPrive ? 'Suite Privée' : 'Chambre Standard'}
-                    </span>
-                    {chambre.type?.nbrLit > 1 && (
-                      <span className="px-2 py-1 bg-orange-500/90 text-white rounded-full text-xs font-medium backdrop-blur-sm flex items-center gap-1">
-                        <MdKingBed className="text-xs" />
-                        {chambre.type.nbrLit} lits
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Badge statut en haut à droite */}
-                  <div className="absolute top-4 right-4">
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm flex items-center gap-1.5 ${
-                      chambre.status === 'occupée' 
-                        ? 'bg-red-500/90 text-white' 
-                        : isSelected
-                        ? 'bg-green-500/90 text-white'
-                        : 'bg-emerald-500/90 text-white'
-                    }`}>
-                      {chambre.status === 'occupée' ? (
-                        <>
-                          <FaBed className="text-xs" />
-                          Occupée
-                        </>
-                      ) : isSelected ? (
-                        <>
-                          <FaCheck className="text-xs" />
-                          Sélectionnée
-                        </>
-                      ) : (
-                        <>
-                          <FaDoorOpen className="text-xs" />
-                          Disponible
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Prix en bas à droite sur l'image */}
-                  <div className="absolute bottom-4 right-4 text-right">
-                    <div className="text-2xl font-bold text-white drop-shadow-lg">{chambre.prix}€</div>
-                    <div className="text-white/90 text-sm drop-shadow">par nuit</div>
-                  </div>
-
-                  {/* Nom de la chambre en bas à gauche */}
-                  <div className="absolute bottom-4 left-4">
-                    <h3 className="text-xl font-bold text-white drop-shadow-lg">Chambre {chambre.numero}</h3>
-                    <p className="text-white/90 text-sm drop-shadow capitalize">{chambre.type?.nom || 'Standard'}</p>
-                  </div>
-
-                  {/* Overlay pour chambre occupée */}
-                  {chambre.status === 'occupée' && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <div className="bg-white/95 rounded-2xl p-6 text-center shadow-2xl transform -rotate-2">
-                        <FaBed className="text-red-500 text-2xl mx-auto mb-3" />
-                        <div className="text-red-600 font-bold text-sm mb-1">INDISPONIBLE</div>
-                        <div className="text-gray-500 text-xs">Chambre occupée</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Indicateur de sélection */}
-                  {isSelected && (
-                    <div className="absolute inset-0 bg-green-500/10 border-4 border-green-400/30 rounded-3xl pointer-events-none">
-                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                        <div className="bg-green-500 text-white rounded-full p-4 shadow-2xl animate-pulse">
-                          <FaCheck className="text-xl" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Contenu sous l'image */}
-                <div className="p-6">
-                  {/* Capacité et superficie */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-1.5">
-                        <FaUserFriends className="text-blue-500" />
-                        <span>{chambre.type?.maxPersonnes || 2} personnes</span>
-                      </div>
-                      <div className="w-px h-4 bg-gray-300"></div>
-                      <div className="flex items-center gap-1.5">
-                        <FaRulerCombined className="text-green-500" />
-                        <span>{chambre.estPrive ? '35' : '20'}m²</span>
-                      </div>
-                    </div>
-                    
-                    {/* Évaluation simulée */}
-                    <div className="flex items-center gap-1 text-amber-500">
-                      <FaStar className="text-sm" />
-                      <span className="text-xs font-semibold text-gray-700">4.8</span>
-                    </div>
-                  </div>
-
-                  {/* Services avec icônes modernes */}
-                  <div className="mb-5">
-                    <h4 className="text-sm font-semibold text-gray-800 mb-3">Services inclus</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {chambre.services && chambre.services.length > 0 ? (
-                        chambre.services.slice(0, 4).map((service, index) => (
-                          <div
-                            key={service.id || index}
-                            className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50/80 rounded-lg p-2"
-                          >
-                            {getServiceIcon(getServiceLabel(service))}
-                            <span className="font-medium">{getServiceLabel(service)}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="col-span-2 text-gray-400 text-xs text-center py-2">
-                          Aucun service spécifique
-                        </div>
-                      )}
-                      {chambre.services && chambre.services.length > 4 && (
-                        <div className="col-span-2 text-center">
-                          <span className="text-xs text-blue-500 font-medium">
-                            +{chambre.services.length - 4} autres services
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Séparateur */}
-                  <div className="border-t border-gray-200/60 my-4"></div>
-
-                  {/* Actions et prix total */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">
-                        Total {nuits} nuit(s){isSelected && quantite > 1 && ` × ${quantite}`}
-                      </div>
-                      <div className="text-xl font-bold text-green-600">{total}€</div>
-                    </div>
-                    
-                    {/* Contrôles de quantité ou bouton d'ajout */}
-                    {isSelected ? (
-                      <div className="flex items-center gap-3 bg-green-50 rounded-2xl p-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantite(chambre.id, quantite - 1);
-                          }}
-                          className="w-8 h-8 rounded-full bg-white shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-300 text-green-600 hover:bg-green-100"
-                        >
-                          <FaMinus className="text-xs" />
-                        </button>
-                        <span className="w-8 text-center font-bold text-green-700">{quantite}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantite(chambre.id, quantite + 1);
-                          }}
-                          className="w-8 h-8 rounded-full bg-white shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-300 text-green-600 hover:bg-green-100"
-                        >
-                          <FaPlus className="text-xs" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleChambreSelection(chambre);
+                return (
+                  <div
+                    key={chambre.id}
+                    className={`group relative bg-white rounded-3xl overflow-hidden transition-all duration-500 cursor-pointer ${
+                      isSelected 
+                        ? 'ring-4 ring-green-400/30 shadow-2xl scale-[1.02]' 
+                        : 'shadow-lg hover:shadow-2xl hover:scale-[1.02]'
+                    }`}
+                    onClick={() => toggleChambreSelection(chambre)}
+                  >
+                    {/* Image avec overlay gradient */}
+                    <div className="relative h-56 overflow-hidden">
+                      <img
+                        src={getChambreImage(chambre)}
+                        alt={`Chambre ${chambre.numero}`}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        onError={(e) => {
+                          e.target.src = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=250&fit=crop';
                         }}
-                        disabled={chambre.status === 'occupée'}
-                        className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all duration-300 ${
-                          chambre.status === 'occupée'
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:shadow-lg hover:scale-105'
-                        }`}
-                      >
-                        <FaPlus />
-                        Ajouter
-                      </button>
-                    )}
+                      />
+                      
+                      {/* Gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+
+                      {/* Badges en haut */}
+                      <div className="absolute top-4 left-4 flex flex-col gap-2">
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
+                          chambre.estPrive 
+                            ? 'bg-blue-500/90 text-white' 
+                            : 'bg-purple-500/90 text-white'
+                        }`}>
+                          {chambre.estPrive ? 'Suite Privée' : 'Chambre Standard'}
+                        </span>
+                        {chambre.type?.nbrLit && chambre.type.nbrLit > 1 && (
+                          <span className="px-2 py-1 bg-orange-500/90 text-white rounded-full text-xs font-medium backdrop-blur-sm flex items-center gap-1">
+                            <MdKingBed className="text-xs" />
+                            {chambre.type.nbrLit} lits
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Badge statut - TOUJOURS DISPONIBLE ici */}
+                      <div className="absolute top-4 right-4">
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-green-500/90 text-white'
+                            : 'bg-emerald-500/90 text-white'
+                        }`}>
+                          {isSelected ? (
+                            <>
+                              <FaCheck className="text-xs" />
+                              Sélectionnée
+                            </>
+                          ) : (
+                            <>
+                              <FaDoorOpen className="text-xs" />
+                              Disponible
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Prix en bas à droite sur l'image */}
+                      <div className="absolute bottom-4 right-4 text-right">
+                        <div className="text-2xl font-bold text-white drop-shadow-lg">{chambre.prix}€</div>
+                        <div className="text-white/90 text-sm drop-shadow">par nuit</div>
+                      </div>
+
+                      {/* Nom de la chambre en bas à gauche */}
+                      <div className="absolute bottom-4 left-4">
+                        <h3 className="text-xl font-bold text-white drop-shadow-lg">Chambre {chambre.numero}</h3>
+                        <p className="text-white/90 text-sm drop-shadow capitalize">{chambre.type?.nom || 'Standard'}</p>
+                      </div>
+
+                      {/* Indicateur de sélection */}
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-green-500/10 border-4 border-green-400/30 rounded-3xl pointer-events-none">
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                            <div className="bg-green-500 text-white rounded-full p-4 shadow-2xl animate-pulse">
+                              <FaCheck className="text-xl" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contenu sous l'image */}
+                    <div className="p-6">
+                      {/* Capacité et superficie */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-1.5">
+                            <FaUserFriends className="text-blue-500" />
+                            <span>{chambre.type?.maxPersonnes || 2} personnes</span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          <div className="flex items-center gap-1.5">
+                            <FaRulerCombined className="text-green-500" />
+                            <span>{chambre.estPrive ? '35' : '20'}m²</span>
+                          </div>
+                        </div>
+                        
+                        {/* Évaluation simulée */}
+                        <div className="flex items-center gap-1 text-amber-500">
+                          <FaStar className="text-sm" />
+                          <span className="text-xs font-semibold text-gray-700">4.8</span>
+                        </div>
+                      </div>
+
+                      {/* Services avec icônes modernes */}
+                      <div className="mb-5">
+                        <h4 className="text-sm font-semibold text-gray-800 mb-3">Services inclus</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {chambre.services && chambre.services.length > 0 ? (
+                            chambre.services.slice(0, 4).map((service, index) => (
+                              <div
+                                key={service.id || index}
+                                className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50/80 rounded-lg p-2"
+                              >
+                                {getServiceIcon(getServiceLabel(service))}
+                                <span className="font-medium">{getServiceLabel(service)}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="col-span-2 text-gray-400 text-xs text-center py-2">
+                              Aucun service spécifique
+                            </div>
+                          )}
+                          {chambre.services && chambre.services.length > 4 && (
+                            <div className="col-span-2 text-center">
+                              <span className="text-xs text-blue-500 font-medium">
+                                +{chambre.services.length - 4} autres services
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Séparateur */}
+                      <div className="border-t border-gray-200/60 my-4"></div>
+
+                      {/* Actions et prix total */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Total {nuits} nuit(s){isSelected && quantite > 1 && ` × ${quantite}`}
+                          </div>
+                          <div className="text-xl font-bold text-green-600">{total}€</div>
+                        </div>
+                        
+                        {/* Contrôles de quantité ou bouton d'ajout */}
+                        {isSelected ? (
+                          <div className="flex items-center gap-3 bg-green-50 rounded-2xl p-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => updateQuantite(chambre.id, quantite - 1, e)}
+                              className="w-8 h-8 rounded-full bg-white shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-300 text-green-600 hover:bg-green-100"
+                            >
+                              <FaMinus className="text-xs" />
+                            </button>
+                            <span className="w-8 text-center font-bold text-green-700">{quantite}</span>
+                            <button
+                              onClick={(e) => updateQuantite(chambre.id, quantite + 1, e)}
+                              className="w-8 h-8 rounded-full bg-white shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-300 text-green-600 hover:bg-green-100"
+                            >
+                              <FaPlus className="text-xs" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleChambreSelection(chambre);
+                            }}
+                            className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all duration-300 bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:shadow-lg hover:scale-105"
+                          >
+                            <FaPlus />
+                            Ajouter
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Section des chambres indisponibles (optionnel) */}
+        {chambresIndisponibles.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Chambres Indisponibles</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {chambresIndisponibles.slice(0, 3).map((chambre) => (
+                <div
+                  key={chambre.id}
+                  className="bg-white rounded-2xl shadow-lg overflow-hidden opacity-70"
+                >
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={getChambreImage(chambre)}
+                      alt={`Chambre ${chambre.numero}`}
+                      className="w-full h-full object-cover grayscale"
+                    />
+                    <div className="absolute inset-0 bg-black/40"></div>
+                    <div className="absolute top-4 right-4">
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm bg-red-500/90 text-white flex items-center gap-1.5">
+                        <FaBan className="text-xs" />
+                        Indisponible
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-bold text-gray-800">Chambre {chambre.numero}</h3>
+                    <p className="text-gray-500 text-sm">({chambre.type?.nom || 'Standard'})</p>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-        {/* État vide */}
-        {chambres.length === 0 && (
+        {/* État vide - Aucune chambre */}
+        {(!chambres || chambres.length === 0) && (
           <div className="text-center py-20">
             <div className="bg-gradient-to-br from-blue-100 to-purple-100 w-32 h-32 rounded-full flex items-center justify-center mx-auto mb-6">
               <FaBed className="text-4xl text-gray-400" />

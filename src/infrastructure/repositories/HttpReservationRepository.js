@@ -15,27 +15,45 @@ class HttpReservationRepository extends ReservationRepository {
             console.log('🌐 Appel API GET:', `${this.baseUrl}/reservation/`);
             const response = await axios.get(`${this.baseUrl}/reservation/`);
             
-            console.log('📡 Réponse API:', response);
-            console.log('📊 Response.data:', response.data);
+            console.log('📡 Réponse API complète:', response);
+            console.log('📊 Données réservations:', response.data);
             
             let reservationsData = response.data;
 
-            console.log('Données réservations:', response.data);
+            // Vérifier si c'est un tableau ou un objet
+            if (!Array.isArray(reservationsData)) {
+                console.warn('⚠️ Les données ne sont pas un tableau:', reservationsData);
+                reservationsData = [reservationsData];
+            }
             
-            return reservationsData.map(reservationData => new Reservation({
-                id: reservationData.id,
-                id_client: reservationData.id_client,
-                // SUPPRIMER: id_chambre car on utilise la table pivot maintenant
-                date_debut: reservationData.date_debut,
-                date_fin: reservationData.date_fin,
-                statut: reservationData.statut,
-                date_creation: reservationData.date_creation,
-                check_in_time: reservationData.check_in_time,
-                check_out_time: reservationData.check_out_time,
-                client: reservationData.client,
-                chambres: reservationData.chambres, // ← CHANGEMENT: maintenant un tableau
-                chambre_reservation: reservationData.chambre_reservation // ← NOUVEAU: données pivot
-            }));
+            return reservationsData.map(reservationData => {
+                console.log('📋 Mapping réservation:', reservationData);
+                
+                // Calculer le montant total et acompte à partir des données disponibles
+                const tarifTemplate = parseFloat(reservationData.tarif_template) || 0;
+                const montantTotal = reservationData.montant_total || tarifTemplate;
+                const acompte = reservationData.acompte || 0;
+                const montantRestant = montantTotal - acompte;
+                
+                return new Reservation({
+                    id: reservationData.id,
+                    id_client: reservationData.id_client,
+                    date_debut: reservationData.date_debut,
+                    date_fin: reservationData.date_fin,
+                    statut: reservationData.statut,
+                    statut_paiement: reservationData.statut_paiement || 'non_payee',
+                    montant_total: montantTotal,
+                    acompte: acompte,
+                    montant_restant: montantRestant,
+                    tarif_template: tarifTemplate,
+                    date_creation: reservationData.date_creation,
+                    check_in_time: reservationData.check_in_time,
+                    check_out_time: reservationData.check_out_time,
+                    client: reservationData.client,
+                    chambres: reservationData.chambres || [],
+                    chambre_reservation: reservationData.chambre_reservation
+                });
+            });
             
         } catch (error) {
             console.error('💥 Erreur API:', {
@@ -48,69 +66,124 @@ class HttpReservationRepository extends ReservationRepository {
         }
     }
 
-   // Dans HttpReservationRepository.js
-async create(reservationData) {
-    try {
-      console.log('🌐 Début création réservation:', reservationData);
-      console.log('🔗 Base URL:', this.baseUrl);
-      
-      // ⚠️ CORRECTION : Construire les paramètres URL comme dans Postman
-      const params = new URLSearchParams({
-        id_client: reservationData.id_client,
-        id_chambre: reservationData.id_chambre, // Format "1,2"
-        date_debut: reservationData.date_debut,
-        date_fin: reservationData.date_fin
-      });
-  
-      // Ajouter les paramètres optionnels
-      if (reservationData.statut) {
-        params.append('statut', reservationData.statut);
-      }
-      if (reservationData.tarif_template) {
-        params.append('tarif_template', reservationData.tarif_template);
-      }
-  
-      const url = `${this.baseUrl}/reservation?${params.toString()}`;
-      console.log('🔗 URL complète avec paramètres:', url);
-      console.log('📤 Paramètres envoyés:', params.toString());
-  
-      // ⚠️ CORRECTION : Envoyer une requête POST sans body (tout est dans l'URL)
-      const response = await this.httpClient.post(url, {});
-      
-      console.log('✅ Réservation créée avec succès:', response);
-      return response;
-    } catch (error) {
-      console.error('💥 Erreur détaillée création réservation:', error);
-      throw error;
-    }
-  }
-
-    async update(id, reservationData) {
+    async create(reservationData) {
         try {
-            console.log('🌐 Mise à jour réservation:', id, reservationData);
+            console.log('🌐 Début création réservation avec statuts:', reservationData);
+            console.log('🔗 Base URL:', this.baseUrl);
             
-            const dataToSend = {
+            // ⚠️ CORRECTION : Construire les paramètres URL avec les nouveaux champs
+            const params = new URLSearchParams({
                 id_client: reservationData.id_client,
+                id_chambre: reservationData.id_chambre,
                 date_debut: reservationData.date_debut,
-                date_fin: reservationData.date_fin,
-                statut: reservationData.statut,
-                tarif_template: reservationData.tarif_template,
-                chambres: reservationData.chambres
-            };
-            
-            const response = await this.httpClient.put(`${this.baseUrl}/reservations/${id}`, dataToSend);
-            console.log('📡 Réponse mise à jour:', response);
-            
-            return new Reservation({
-                ...response.data,
-                chambres: response.data.chambres || []
+                date_fin: reservationData.date_fin
             });
+        
+            // Ajouter les paramètres optionnels
+            if (reservationData.statut) {
+                params.append('statut', reservationData.statut);
+            }
+            if (reservationData.tarif_template) {
+                params.append('tarif_template', reservationData.tarif_template);
+            }
+            // ⚠️ CORRECTION : Ajouter les nouveaux paramètres de statut de paiement
+            if (reservationData.statut_paiement) {
+                params.append('statut_paiement', reservationData.statut_paiement);
+            }
+            if (reservationData.montant_total) {
+                params.append('montant_total', reservationData.montant_total);
+            }
+            if (reservationData.acompte) {
+                params.append('acompte', reservationData.acompte);
+            }
+        
+            const url = `${this.baseUrl}/reservation?${params.toString()}`;
+            console.log('🔗 URL complète avec paramètres:', url);
+            console.log('📤 Paramètres envoyés:', params.toString());
+        
+            const response = await this.httpClient.post(url, {});
+            
+            console.log('✅ Réservation créée avec succès:', response);
+            return response;
         } catch (error) {
-            console.error('💥 Erreur mise à jour réservation:', error);
+            console.error('💥 Erreur détaillée création réservation:', error);
             throw error;
         }
     }
 
+    async update(id, reservationData) {
+        try {
+          console.log('🌐 Mise à jour réservation ID:', id, 'avec données:', reservationData);
+          
+          // CORRECTION : Construire les paramètres URL comme dans l'image
+          const params = new URLSearchParams();
+          
+          // Ajouter les paramètres obligatoires
+          params.append('id_client', reservationData.id_client);
+          params.append('id_chambre', reservationData.id_chambre);
+          params.append('date_debut', reservationData.date_debut);
+          params.append('date_fin', reservationData.date_fin);
+          params.append('statut', reservationData.statut);
+          
+          // Ajouter les paramètres optionnels
+          if (reservationData.montant_total !== undefined && reservationData.montant_total !== null) {
+            params.append('montant_total', reservationData.montant_total);
+          }
+          
+          if (reservationData.acompte !== undefined && reservationData.acompte !== null) {
+            params.append('acompte', reservationData.acompte);
+          }
+          
+          if (reservationData.check_in_time) {
+            // Convertir en format date seulement (sans l'heure)
+            const checkInDate = reservationData.check_in_time.split('T')[0];
+            params.append('check_in_time', checkInDate);
+          }
+          
+          if (reservationData.check_out_time) {
+            // Convertir en format date seulement (sans l'heure)
+            const checkOutDate = reservationData.check_out_time.split('T')[0];
+            params.append('check_out_time', checkOutDate);
+          }
+          
+          // Construire l'URL complète avec les paramètres
+          const queryString = params.toString();
+          const url = `${this.baseUrl}/reservation/${id}?${queryString}`;
+          
+          console.log('🔗 URL de mise à jour:', url);
+          console.log('📤 Paramètres envoyés:', queryString);
+          
+          // Envoyer la requête PUT avec les paramètres dans l'URL et un body vide
+          const response = await this.httpClient.put(url, {});
+          
+          console.log('✅ Réponse mise à jour:', response);
+          
+          // Retourner la réservation mise à jour
+          if (response.data) {
+            return new Reservation({
+              ...response.data,
+              chambres: response.data.chambres || [],
+              statut_paiement: response.data.statut_paiement || 'non_payee',
+              montant_total: response.data.montant_total || 0,
+              acompte: response.data.acompte || 0,
+              check_in_time: response.data.check_in_time || null,
+              check_out_time: response.data.check_out_time || null
+            });
+          }
+          
+          return response;
+          
+        } catch (error) {
+          console.error('💥 Erreur détaillée mise à jour réservation:', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data,
+            url: error.config?.url
+          });
+          throw error;
+        }
+      }
+    
     async delete(id) {
         try {
             console.log('🌐 Suppression réservation:', id);
@@ -136,6 +209,10 @@ async create(reservationData) {
                 date_debut: reservationData.date_debut,
                 date_fin: reservationData.date_fin,
                 statut: reservationData.statut,
+                // ⚠️ CORRECTION : Ajout des nouveaux champs
+                statut_paiement: reservationData.statut_paiement || 'non_payee',
+                montant_total: reservationData.montant_total || 0,
+                acompte: reservationData.acompte || 0,
                 date_creation: reservationData.date_creation,
                 check_in_time: reservationData.check_in_time,
                 check_out_time: reservationData.check_out_time,
@@ -161,6 +238,10 @@ async create(reservationData) {
                 date_debut: reservationData.date_debut,
                 date_fin: reservationData.date_fin,
                 statut: reservationData.statut,
+                // ⚠️ CORRECTION : Ajout des nouveaux champs
+                statut_paiement: reservationData.statut_paiement || 'non_payee',
+                montant_total: reservationData.montant_total || 0,
+                acompte: reservationData.acompte || 0,
                 date_creation: reservationData.date_creation,
                 check_in_time: reservationData.check_in_time,
                 check_out_time: reservationData.check_out_time,
@@ -174,19 +255,7 @@ async create(reservationData) {
         }
     }
 
-    // NOUVELLE MÉTHODE: Récupérer les chambres disponibles
-    async getChambresDisponibles(dateDebut, dateFin) {
-        try {
-            console.log('🌐 Récupération chambres disponibles:', { dateDebut, dateFin });
-            const response = await axios.get(`${this.baseUrl}/chambres/disponibles`, {
-                params: { date_debut: dateDebut, date_fin: dateFin }
-            });
-            return response.data;
-        } catch (error) {
-            console.error('💥 Erreur récupération chambres disponibles:', error);
-            throw error;
-        }
-    }
+
 }
 
 export default HttpReservationRepository;
